@@ -57,7 +57,7 @@ pub fn caught_main() !void {
 
     var size = try get_module_size(proc_handle, mod_handle);
 
-    try stdout.print("Module handle address:: {x}\n", .{@ptrToInt(mod_handle)});
+    try stdout.print("Module handle address: {x}\n", .{@ptrToInt(mod_handle)});
 
     var patch_addr = try get_memory_address(proc_handle, @ptrToInt(mod_handle), size, EGG[0..], allocator);
 
@@ -73,18 +73,23 @@ pub fn caught_main() !void {
     var patched = try read_memory_address(proc_handle, patch_addr - PATCH_OFFSET, EGG.len, allocator);
     defer allocator.free(patched);
 
-    try print_buffer(patched);
-
     var egg_clone = try std.mem.dupe(allocator, u8, &EGG);
 
     std.mem.copy(u8, egg_clone[PATCH_OFFSET..PATCH_OFFSET + PATCH.len], &PATCH);
 
     // Make sure patch was applied correctly
-    std.debug.assert(std.mem.eql(u8, egg_clone, patched));
+    if (!std.mem.eql(u8, egg_clone, patched)) {
+        try stdout.print("Expected: ", .{});
+        try print_buffer(egg_clone);
+        try stdout.print("Got: ", .{});
+        try print_buffer(patched);
+
+        return error.PatchAppliedIncorrectly;
+    }
 }
 
 pub fn catch_if_ncli() !void {
-    var stdout = std.io.getStdOut();
+    var stdout = std.io.getStdOut().writer();
 
     var buf: [10]c.LPDWORD = undefined;
 
@@ -95,7 +100,7 @@ pub fn catch_if_ncli() !void {
         return;
     }
 
-    std.debug.print("Press ENTER to close.", .{});
+    try stdout.print("Press ENTER to close.", .{});
 
     // Keep console open
     _ = try std.io.getStdIn().reader().readByte();
@@ -153,8 +158,6 @@ pub fn get_memory_address(proc_handle: win.HANDLE, addr: usize, size: usize, mem
         return error.MemoryUnreadable;
 
     var ind = std.mem.indexOf(u8, buf[0..bytes_read], mem) orelse return error.PatternNotFound;
-
-    try print_buffer(buf[ind..ind + mem.len]);
 
     return addr + ind;
 }
