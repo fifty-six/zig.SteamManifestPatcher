@@ -4,6 +4,7 @@ pub const HANDLE = win.HANDLE;
 pub const DWORD = win.DWORD;
 pub const HMODULE = win.HMODULE;
 pub const LPCVOID = win.LPCVOID;
+pub const LPDWORD = win.LPDWORD;
 pub const LPVOID = win.LPVOID;
 pub const SIZE_T = win.SIZE_T;
 pub const BOOL = win.BOOL;
@@ -43,6 +44,8 @@ pub extern fn OpenProcess(dwDesiredAccess: c_ulong, bInheritHandle: c_int, dwPro
 
 pub extern fn ReadProcessMemory(hProcess: HANDLE, lpBaseAddress: LPCVOID, lpBuffer: LPVOID, nSize: SIZE_T, lpNumberOfBytesRead: *SIZE_T) callconv(.Stdcall) BOOL;
 
-pub extern fn WriteProcessMemory(hProcess: HANDLE, lpBaseAddress: LPCVOID, lpBuffer: LPVOID, nSize: SIZE_T, lpNumberOfBytesWritten: *SIZE_T) callconv(.Stdcall) BOOL;
+pub extern fn WriteProcessMemory(hProcess: HANDLE, lpBaseAddress: LPCVOID, lpBuffer: LPCVOID, nSize: SIZE_T, lpNumberOfBytesWritten: *SIZE_T) callconv(.Stdcall) BOOL;
 
 pub extern fn VirtualProtectEx(hProcess: HANDLE, lpAddress: win.LPCVOID, dwSize: DWORD, flNewProtect: DWORD, lpflOldProtect: *DWORD) callconv(.Stdcall) BOOL;
+
+pub extern fn GetConsoleProcessList(lpdwProcessList: LPDWORD, dwProcessCount: DWORD) DWORD;

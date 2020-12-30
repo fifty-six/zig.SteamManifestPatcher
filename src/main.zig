@@ -5,7 +5,39 @@ const win = std.os.windows;
 
 const c = @import("./c.zig");
 
+// steamclient.dll
+// .text : 383E41DD
+const EGG = [_]u8 { 
+    // call addr
+    0xE8, 0x4B, 0xF7, 0xEC, 0xFF,
+    // test al, al
+    0x84, 0xC0,
+    // jnz addr
+    0x0F, 0x85, 0x9D, 0x00, 0x00, 0x00 
+};
+
+const PATCH = [_]u8 { 
+    // jnz => nop, jmp
+    // nop, jmp is used because jnz is 2-byte.
+    0x90, 0xE9
+};
+
+// After test al, al
+const PATCH_OFFSET = 7;
+
 pub fn main() !void {
+    caught_main() catch |e| {
+        std.debug.print("{}\n", .{e});
+
+        if (@errorReturnTrace()) |trace| {
+            std.debug.dumpStackTrace(trace.*);
+        }
+    };
+
+    try catch_if_ncli();
+}
+
+pub fn caught_main() !void {
     const stdout = std.io.getStdOut().writer();
 
     var heap = std.heap.HeapAllocator.init();
@@ -25,26 +57,69 @@ pub fn main() !void {
 
     var size = try get_module_size(proc_handle, mod_handle);
 
-    var patch_addr = try get_patch_addr(proc_handle, @ptrToInt(mod_handle), size, allocator);
+    try stdout.print("Module handle address:: {x}\n", .{@ptrToInt(mod_handle)});
+
+    var patch_addr = try get_memory_address(proc_handle, @ptrToInt(mod_handle), size, EGG[0..], allocator);
+
+    // We add the offset in order to skip rewriting unchanged instructions.
+    patch_addr += PATCH_OFFSET;
 
     try stdout.print("Found patch address: {x}\n", .{patch_addr});
 
-    try write_patch(proc_handle, mod_handle, size, patch_addr);
+    try write_patch(proc_handle, mod_handle, size, patch_addr, PATCH[0..]);
 
     try stdout.print("Wrote patch to memory.\n", .{});
+
+    var patched = try read_memory_address(proc_handle, patch_addr - PATCH_OFFSET, EGG.len, allocator);
+    defer allocator.free(patched);
+
+    try print_buffer(patched);
+
+    var egg_clone = try std.mem.dupe(allocator, u8, &EGG);
+
+    std.mem.copy(u8, egg_clone[PATCH_OFFSET..PATCH_OFFSET + PATCH.len], &PATCH);
+
+    // Make sure patch was applied correctly
+    std.debug.assert(std.mem.eql(u8, egg_clone, patched));
 }
 
-pub fn write_patch(proc: win.HANDLE, module: win.HANDLE, size: usize, addr: usize) !void {
+pub fn catch_if_ncli() !void {
+    var stdout = std.io.getStdOut();
+
+    var buf: [10]c.LPDWORD = undefined;
+
+    var count = c.GetConsoleProcessList(@ptrCast(*u32, &buf), buf.len);
+
+    // Run from the CLI.
+    if (count != 1) {
+        return;
+    }
+
+    std.debug.print("Press ENTER to close.", .{});
+
+    // Keep console open
+    _ = try std.io.getStdIn().reader().readByte();
+}
+
+pub fn print_buffer(buf: []u8) !void {
+    const stdout = std.io.getStdOut().writer();
+
+    for (buf) |char| {
+        try stdout.print("{X:0>2} ", .{char});
+    }
+
+    try stdout.print("\n", .{});
+}
+
+pub fn write_patch(proc: win.HANDLE, module: win.HANDLE, size: usize, addr: usize, patch: []const u8) !void {
     var old_protection: win.DWORD = undefined;
 
     if (c.VirtualProtectEx(proc, module, @truncate(u32, size), c.PAGE_EXECUTE_READWRITE, &old_protection) == 0)
         return error.ProtectionUnwritable;
 
-    var patch = [_]u8 { 0x0F, 0x84, 0x2E, 0xFF, 0xFF, 0xFF };
-
     var bytes_written: win.SIZE_T = undefined;
 
-    if (c.WriteProcessMemory(proc, @intToPtr(*c_void, addr), @ptrCast(*c_void, &patch), patch.len, &bytes_written) == 0)
+    if (c.WriteProcessMemory(proc, @intToPtr(*c_void, addr), @ptrCast(*const c_void, patch), patch.len, &bytes_written) == 0)
         return error.UnableToWriteMemory;
 }
 
@@ -57,7 +132,18 @@ pub fn get_module_size(proc: win.HANDLE, module: win.HANDLE) !usize {
     return mod_info.SizeOfImage;
 }
 
-pub fn get_patch_addr(proc_handle: win.HANDLE, addr: usize, size: usize, alloc: *std.mem.Allocator) !usize {
+pub fn read_memory_address(proc_handle: win.HANDLE, addr: usize, size: usize, alloc: *std.mem.Allocator) ![]u8 {
+    var buf : []u8 = try alloc.alloc(u8, size);
+
+    var bytes_read : win.SIZE_T = undefined;
+
+    if (c.ReadProcessMemory(proc_handle, @intToPtr(win.LPCVOID, addr), @ptrCast(*c_void, buf), size, &bytes_read) == 0)
+        return error.MemoryUnreadable;
+
+    return buf[0..bytes_read];
+}
+
+pub fn get_memory_address(proc_handle: win.HANDLE, addr: usize, size: usize, mem: []const u8, alloc: *std.mem.Allocator) !usize {
     var buf : []u8 = try alloc.alloc(u8, size);
     defer alloc.free(buf);
 
@@ -66,11 +152,11 @@ pub fn get_patch_addr(proc_handle: win.HANDLE, addr: usize, size: usize, alloc: 
     if (c.ReadProcessMemory(proc_handle, @intToPtr(win.LPCVOID, addr), @ptrCast(*c_void, buf), size, &bytes_read) == 0)
         return error.MemoryUnreadable;
 
-    const egg = [_]u8 { 0x84, 0xC0, 0x0F, 0x85, 0x2E, 0xFF, 0xFF, 0xFF };
+    var ind = std.mem.indexOf(u8, buf[0..bytes_read], mem) orelse return error.PatternNotFound;
 
-    var ind = std.mem.indexOf(u8, buf[0..bytes_read], &egg) orelse return error.PatternNotFound;
+    try print_buffer(buf[ind..ind + mem.len]);
 
-    return addr + ind + 2;
+    return addr + ind;
 }
 
 pub fn handle_for_mod(procHandle: win.HANDLE, target: []const u8) !win.HMODULE {
