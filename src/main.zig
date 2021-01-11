@@ -43,7 +43,10 @@ pub fn caught_main() !void {
 
     try stdout.print("Module handle address: {x}\n", .{handle_addr});
 
-    var str_addr = try get_memory_address(proc_handle, handle_addr, size, STR, allocator);
+    var buf = try read_memory_address(proc_handle, handle_addr, size, allocator);
+
+    const str_ind = std.mem.indexOf(u8, buf, STR) orelse return error.StringNotFound;
+    const str_addr = handle_addr + str_ind;
 
     // Sentinel-terminated by the leading zeros (LE).
     var bytes = @ptrCast([*:0]const u8, &str_addr);
@@ -61,8 +64,6 @@ pub fn caught_main() !void {
     clone[0] = 0x68;
 
     try print_buffer(clone);
-
-    var buf = try read_memory_address(proc_handle, @ptrToInt(mod_handle), size, allocator);
 
     var ind = std.mem.indexOf(u8, buf, clone) orelse return error.PatternNotFound;
 
@@ -155,20 +156,6 @@ pub fn read_memory_address(proc_handle: win.HANDLE, addr: usize, size: usize, al
         return error.MemoryUnreadable;
 
     return buf[0..bytes_read];
-}
-
-pub fn get_memory_address(proc_handle: win.HANDLE, addr: usize, size: usize, mem: []const u8, alloc: *std.mem.Allocator) !usize {
-    var buf : []u8 = try alloc.alloc(u8, size);
-    defer alloc.free(buf);
-
-    var bytes_read : win.SIZE_T = undefined;
-
-    if (c.ReadProcessMemory(proc_handle, @intToPtr(win.LPCVOID, addr), @ptrCast(*c_void, buf), size, &bytes_read) == 0)
-        return error.MemoryUnreadable;
-
-    var ind = std.mem.indexOf(u8, buf[0..bytes_read], mem) orelse return error.PatternNotFound;
-
-    return addr + ind;
 }
 
 pub fn handle_for_mod(procHandle: win.HANDLE, target: []const u8) !win.HMODULE {
