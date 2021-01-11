@@ -62,16 +62,16 @@ pub fn caught_main() !void {
 
     std.mem.copy(u8, clone[1..], slice);
 
-    // pop instr
+    // push instr
     clone[0] = 0x68;
 
     try print_buffer(clone);
 
-    const pop_ind = std.mem.indexOf(u8, buf, clone) orelse return error.PatternNotFound;
+    const push_ind = std.mem.indexOf(u8, buf, clone) orelse return error.PatternNotFound;
 
-    try stdout.print("Addr: {x}\n", .{handle_addr + pop_ind});
+    try stdout.print("Addr: {x}\n", .{handle_addr + push_ind});
 
-    var ind = pop_ind;
+    var ind = push_ind;
 
     while (buf[ind] != 0x0F and buf[ind + 1] != 0x85) {
         ind -= 1;
@@ -80,7 +80,7 @@ pub fn caught_main() !void {
     // Either the patch has already been applied or the jnz isn't there
     // We want to prevent writing over code which isn't actually part
     // of what we want to patch.
-    if (ind < pop_ind - 10) {
+    if (ind < push_ind - 10) {
         return error.PatternNotFound;
     }
 
