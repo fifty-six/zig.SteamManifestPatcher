@@ -30,34 +30,34 @@ pub fn caught_main() !void {
 
     const allocator = &heap.allocator;
 
-    var proc_id = try proc_id_by_name("steam.exe");
+    const proc_id = try proc_id_by_name("steam.exe");
 
     try stdout.print("Got process handle.\n", .{});
 
     const flags = c.PROCESS_QUERY_INFORMATION | c.PROCESS_VM_OPERATION | c.PROCESS_VM_READ | c.PROCESS_VM_WRITE;
 
-    var proc_handle = c.OpenProcess(flags, @boolToInt(false), proc_id);
+    const proc_handle = c.OpenProcess(flags, @boolToInt(false), proc_id);
 
-    var mod_handle = try handle_for_mod(proc_handle, "steamclient.dll");
+    const mod_handle = try handle_for_mod(proc_handle, "steamclient.dll");
     const handle_addr = @ptrToInt(mod_handle);
 
-    var size = try get_module_size(proc_handle, mod_handle);
+    const size = try get_module_size(proc_handle, mod_handle);
 
     try stdout.print("Module handle address: {x}\n", .{handle_addr});
 
-    var buf = try read_memory_address(proc_handle, handle_addr, size, allocator);
+    const buf = try read_memory_address(proc_handle, handle_addr, size, allocator);
 
     const str_ind = std.mem.indexOf(u8, buf, STR) orelse return error.StringNotFound;
     const str_addr = handle_addr + str_ind;
 
     // Sentinel-terminated by the leading zeros (LE).
-    var bytes = @ptrCast([*:0]const u8, &str_addr);
+    const bytes = @ptrCast([*:0]const u8, &str_addr);
 
     // As an actual slice
-    var slice: []const u8 = std.mem.spanZ(bytes);
+    const slice: []const u8 = std.mem.spanZ(bytes);
 
     // Insert pop before address
-    var clone = try allocator.alloc(u8, slice.len + 1);
+    const clone = try allocator.alloc(u8, slice.len + 1);
     defer allocator.free(clone);
 
     std.mem.copy(u8, clone[1..], slice);
@@ -88,14 +88,14 @@ pub fn caught_main() !void {
     buf[ind    ] = 0x90;
     buf[ind + 1] = 0xE9;
 
-    var patch_addr = @ptrToInt(mod_handle) + ind;
+    const patch_addr = @ptrToInt(mod_handle) + ind;
 
     try write_patch(proc_handle, mod_handle, size, patch_addr, buf[ind..ind + 2]);
 
     try stdout.print("Wrote patch to memory.\n", .{});
 
     // Read 10 bytes before and after the patch address.
-    var patched = try read_memory_address(proc_handle, patch_addr - 10, 20, allocator);
+    const patched = try read_memory_address(proc_handle, patch_addr - 10, 20, allocator);
     defer allocator.free(patched);
 
     // Make sure patch was applied correctly
@@ -110,11 +110,11 @@ pub fn caught_main() !void {
 }
 
 pub fn catch_if_ncli() !void {
-    var stdout = std.io.getStdOut().writer();
+    const stdout = std.io.getStdOut().writer();
 
     var buf: [10]c.LPDWORD = undefined;
 
-    var count = c.GetConsoleProcessList(@ptrCast(*u32, &buf), buf.len);
+    const count = c.GetConsoleProcessList(@ptrCast(*u32, &buf), buf.len);
 
     // Run from the CLI.
     if (count != 1) {

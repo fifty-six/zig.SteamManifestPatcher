@@ -72,7 +72,7 @@ pub fn proc_id_by_name(name: []const u8) !u32 {
         return error.UnableToProcess;
 
     while (c.Process32Next(snap, &entry) != 0) {
-        var slice = std.mem.spanZ(&entry.szExeFile);
+        const slice = std.mem.spanZ(&entry.szExeFile);
 
         if (std.mem.eql(u8, slice, name))
             return entry.th32ProcessID;
