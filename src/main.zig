@@ -1,29 +1,12 @@
 const std = @import("std");
-const psapi = std.os.windows.psapi;
+const math = std.math;
 
+const psapi = std.os.windows.psapi;
 const win = std.os.windows;
 
 const c = @import("./c.zig");
 
-// steamclient.dll
-// .text : 383E41DD
-const EGG = [_]u8 { 
-    // call addr
-    0xE8, 0x4B, 0xF7, 0xEC, 0xFF,
-    // test al, al
-    0x84, 0xC0,
-    // jnz addr
-    0x0F, 0x85, 0x9D, 0x00, 0x00, 0x00 
-};
-
-const PATCH = [_]u8 { 
-    // jnz => nop, jmp
-    // nop, jmp is used because jnz is 2-byte.
-    0x90, 0xE9
-};
-
-// After test al, al
-const PATCH_OFFSET = 7;
+const STR: []const u8 = "Depot download failed : Manifest not available";
 
 pub fn main() !void {
     caught_main() catch |e| {
@@ -54,33 +37,59 @@ pub fn caught_main() !void {
     var proc_handle = c.OpenProcess(flags, @boolToInt(false), proc_id);
 
     var mod_handle = try handle_for_mod(proc_handle, "steamclient.dll");
+    const handle_addr = @ptrToInt(mod_handle);
 
     var size = try get_module_size(proc_handle, mod_handle);
 
-    try stdout.print("Module handle address: {x}\n", .{@ptrToInt(mod_handle)});
+    try stdout.print("Module handle address: {x}\n", .{handle_addr});
 
-    var patch_addr = try get_memory_address(proc_handle, @ptrToInt(mod_handle), size, EGG[0..], allocator);
+    var str_addr = try get_memory_address(proc_handle, handle_addr, size, STR, allocator);
 
-    // We add the offset in order to skip rewriting unchanged instructions.
-    patch_addr += PATCH_OFFSET;
+    // Sentinel-terminated by the leading zeros (LE).
+    var bytes = @ptrCast([*:0]const u8, &str_addr);
 
-    try stdout.print("Found patch address: {x}\n", .{patch_addr});
+    // As an actual slice
+    var slice: []const u8 = std.mem.spanZ(bytes);
 
-    try write_patch(proc_handle, mod_handle, size, patch_addr, PATCH[0..]);
+    // Insert pop before address
+    var clone = try allocator.alloc(u8, slice.len + 1);
+    defer allocator.free(clone);
+
+    std.mem.copy(u8, clone[1..], slice);
+
+    // pop instr
+    clone[0] = 0x68;
+
+    try print_buffer(clone);
+
+    var buf = try read_memory_address(proc_handle, @ptrToInt(mod_handle), size, allocator);
+
+    var ind = std.mem.indexOf(u8, buf, clone) orelse return error.PatternNotFound;
+
+    try stdout.print("Addr: {x}\n", .{handle_addr + ind});
+
+    while (buf[ind] != 0x0F and buf[ind + 1] != 0x85) {
+        ind -= 1;
+    }
+
+    // Replace 2-byte jnz with nop, jmp
+    buf[ind    ] = 0x90;
+    buf[ind + 1] = 0xE9;
+
+    var patch_addr = @ptrToInt(mod_handle) + ind;
+
+    try write_patch(proc_handle, mod_handle, size, patch_addr, buf[ind..ind + 2]);
 
     try stdout.print("Wrote patch to memory.\n", .{});
 
-    var patched = try read_memory_address(proc_handle, patch_addr - PATCH_OFFSET, EGG.len, allocator);
+    // Read 10 bytes before and after the patch address.
+    var patched = try read_memory_address(proc_handle, patch_addr - 10, 20, allocator);
     defer allocator.free(patched);
 
-    var egg_clone = try std.mem.dupe(allocator, u8, &EGG);
-
-    std.mem.copy(u8, egg_clone[PATCH_OFFSET..PATCH_OFFSET + PATCH.len], &PATCH);
-
     // Make sure patch was applied correctly
-    if (!std.mem.eql(u8, egg_clone, patched)) {
+    if (!std.mem.eql(u8, buf[ind - 10..ind + 10], patched)) {
         try stdout.print("Expected: ", .{});
-        try print_buffer(egg_clone);
+        try print_buffer(buf[ind - 10.. ind + 10]);
         try stdout.print("Got: ", .{});
         try print_buffer(patched);
 
@@ -106,7 +115,7 @@ pub fn catch_if_ncli() !void {
     _ = try std.io.getStdIn().reader().readByte();
 }
 
-pub fn print_buffer(buf: []u8) !void {
+pub fn print_buffer(buf: []const u8) !void {
     const stdout = std.io.getStdOut().writer();
 
     for (buf) |char| {
