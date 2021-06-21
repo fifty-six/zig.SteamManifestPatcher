@@ -36,7 +36,7 @@ pub fn caught_main() !void {
 
     const flags = c.PROCESS_QUERY_INFORMATION | c.PROCESS_VM_OPERATION | c.PROCESS_VM_READ | c.PROCESS_VM_WRITE;
 
-    const proc_handle = c.OpenProcess(flags, @boolToInt(false), proc_id);
+    const proc_handle = c.OpenProcess(flags, @boolToInt(false), proc_id) orelse return error.UnableToOpenProcess;
 
     const mod_handle = try handle_for_mod(proc_handle, "steamclient.dll");
     const handle_addr = @ptrToInt(mod_handle);

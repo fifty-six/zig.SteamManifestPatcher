@@ -63,10 +63,10 @@ pub fn handle_for_mod(procHandle: win.HANDLE, target: []const u8) !win.HMODULE {
 }
 
 pub fn proc_id_by_name(name: []const u8) !u32 {
-    var entry: c.ProcessEntry32 = undefined;
-    entry.dwSize = @sizeOf(c.ProcessEntry32);
+    var entry: c.PROCESSENTRY32 = undefined;
+    entry.dwSize = @sizeOf(@TypeOf(entry));
 
-    var snap: win.HANDLE = c.CreateToolhelp32Snapshot(c.TH32CS_SNAPPROCESS, 0);
+    var snap: ?win.HANDLE = c.CreateToolhelp32Snapshot(c.TH32CS_SNAPPROCESS, 0);
 
     if (c.Process32First(snap, &entry) == 0)
         return error.UnableToProcess;
