@@ -29,7 +29,7 @@ pub fn get_module_size(proc: win.HANDLE, module: win.HANDLE) !usize {
 pub fn read_memory_address(proc_handle: win.HANDLE, addr: usize, size: usize, alloc: *std.mem.Allocator) ![]u8 {
     var buf: []u8 = try alloc.alloc(u8, size);
 
-    var bytes_read : win.SIZE_T = undefined;
+    var bytes_read: win.SIZE_T = undefined;
 
     if (c.ReadProcessMemory(proc_handle, @intToPtr(win.LPCVOID, addr), @ptrCast(*c_void, buf), size, &bytes_read) == 0)
         return error.MemoryUnreadable;
@@ -48,7 +48,7 @@ pub fn handle_for_mod(procHandle: win.HANDLE, target: []const u8) !win.HMODULE {
         return error.BufferTooSmall;
 
     for (handles[0..(cbNeeded / @sizeOf(win.HMODULE))]) |handle| {
-        var name: [win.MAX_PATH : 0]u8 = undefined;
+        var name: [win.MAX_PATH:0]u8 = undefined;
 
         if (psapi.GetModuleFileNameExA(procHandle, handle, &name, name.len / @sizeOf(u8)) == 0)
             continue;

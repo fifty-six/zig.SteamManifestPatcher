@@ -85,12 +85,12 @@ pub fn caught_main() !void {
     }
 
     // Replace 2-byte jnz with nop, jmp
-    buf[ind    ] = 0x90;
+    buf[ind] = 0x90;
     buf[ind + 1] = 0xE9;
 
     const patch_addr = @ptrToInt(mod_handle) + ind;
 
-    try write_patch(proc_handle, mod_handle, size, patch_addr, buf[ind..ind + 2]);
+    try write_patch(proc_handle, mod_handle, size, patch_addr, buf[ind .. ind + 2]);
 
     try stdout.print("Wrote patch to memory.\n", .{});
 
@@ -99,9 +99,9 @@ pub fn caught_main() !void {
     defer allocator.free(patched);
 
     // Make sure patch was applied correctly
-    if (!std.mem.eql(u8, buf[ind - 10..ind + 10], patched)) {
+    if (!std.mem.eql(u8, buf[ind - 10 .. ind + 10], patched)) {
         try stdout.print("Expected: ", .{});
-        try print_buffer(buf[ind - 10.. ind + 10]);
+        try print_buffer(buf[ind - 10 .. ind + 10]);
         try stdout.print("Got: ", .{});
         try print_buffer(patched);
 
