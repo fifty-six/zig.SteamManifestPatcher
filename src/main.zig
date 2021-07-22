@@ -30,7 +30,7 @@ pub fn caught_main() !void {
 
     const allocator = &heap.allocator;
 
-    const proc_id = try proc_id_by_name("steam.exe");
+    const proc_id = (try proc_id_by_name("steam.exe")) orelse return error.ProcessNotFound;
 
     try stdout.print("Got process handle.\n", .{});
 

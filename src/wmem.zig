@@ -53,7 +53,7 @@ pub fn handle_for_mod(procHandle: win.HANDLE, target: []const u8) !win.HMODULE {
         if (psapi.GetModuleFileNameExA(procHandle, handle, &name, name.len / @sizeOf(u8)) == 0)
             continue;
 
-        var slice = std.mem.spanZ(&name);
+        var slice = std.mem.sliceTo(&name, 0);
 
         if (std.mem.endsWith(u8, slice, target))
             return handle;
@@ -62,7 +62,7 @@ pub fn handle_for_mod(procHandle: win.HANDLE, target: []const u8) !win.HMODULE {
     return error.HandleNotFound;
 }
 
-pub fn proc_id_by_name(name: []const u8) !u32 {
+pub fn proc_id_by_name(name: []const u8) !?u32 {
     var entry: c.PROCESSENTRY32 = undefined;
     entry.dwSize = @sizeOf(@TypeOf(entry));
 
@@ -72,11 +72,11 @@ pub fn proc_id_by_name(name: []const u8) !u32 {
         return error.UnableToProcess;
 
     while (c.Process32Next(snap, &entry) != 0) {
-        const slice = std.mem.spanZ(&entry.szExeFile);
+        const slice = std.mem.sliceTo(&entry.szExeFile, 0);
 
         if (std.mem.eql(u8, slice, name))
             return entry.th32ProcessID;
     }
 
-    return error.ProcessNotFound;
+    return null;
 }
