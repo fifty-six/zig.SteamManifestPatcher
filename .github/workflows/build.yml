@@ -1,0 +1,21 @@
+name: build
+
+on: push
+
+jobs:
+    build:
+        runs-on: windows-latest
+        steps:
+            - uses: actions/checkout@v2
+            - name: Setup zig
+              uses: goto-bus-stop/setup-zig@v1
+              with:
+                  version: 0.8.0
+            - name: Build
+              run: zig build
+          
+            - name: Upload binary
+              uses: actions/upload-artifact@v2
+              with:
+                  name: out
+                  path: ./zig-out/
