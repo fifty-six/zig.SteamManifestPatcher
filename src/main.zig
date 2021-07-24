@@ -81,7 +81,7 @@ pub fn caught_main() !void {
     // We want to prevent writing over code which isn't actually part
     // of what we want to patch.
     if (ind < push_ind - 10) {
-        return error.PatternNotFound;
+        return error.PatchAlreadyApplied;
     }
 
     // Replace 2-byte jnz with nop, jmp
