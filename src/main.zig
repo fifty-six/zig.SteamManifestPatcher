@@ -57,7 +57,7 @@ pub fn caught_main() !void {
     const bytes = @ptrCast([*:0]const u8, &str_addr);
 
     // As an actual slice
-    const slice: []const u8 = std.mem.spanZ(bytes);
+    const slice: []const u8 = std.mem.span(bytes);
 
     // Insert push before address
     const clone = try allocator.alloc(u8, slice.len + 1);
