@@ -56,7 +56,7 @@ pub fn caught_main() !void {
     // As an actual slice
     const slice: []const u8 = std.mem.spanZ(bytes);
 
-    // Insert pop before address
+    // Insert push before address
     const clone = try allocator.alloc(u8, slice.len + 1);
     defer allocator.free(clone);
 
