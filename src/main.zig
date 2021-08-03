@@ -51,6 +51,9 @@ pub fn caught_main() !void {
     const str_addr = handle_addr + str_ind;
 
     // Sentinel-terminated by the leading zeros (LE).
+    // We only want up to the zeros as the push we use
+    // takes an intermediate with size 16 or 32, which is
+    // smaller than a usize
     const bytes = @ptrCast([*:0]const u8, &str_addr);
 
     // As an actual slice
