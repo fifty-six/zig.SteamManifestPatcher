@@ -1,5 +1,8 @@
 const std = @import("std");
+
 const math = std.math;
+const process = std.process;
+const log = std.log;
 
 const psapi = std.os.windows.psapi;
 const win = std.os.windows;
@@ -22,15 +25,36 @@ pub fn main() !void {
     try catch_if_ncli();
 }
 
+pub fn usage(exe: []const u8) noreturn {
+    log.emerg("Usage: {s} [--steamcmd]\n", .{exe});
+    process.exit(1);
+}
+
 pub fn caught_main() !void {
     const stdout = std.io.getStdOut().writer();
 
-    var heap = std.heap.HeapAllocator.init();
-    defer heap.deinit();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
 
-    const allocator = &heap.allocator;
+    const allocator = &gpa.allocator;
 
-    const proc_id = (try proc_id_by_name("steam.exe")) orelse return error.ProcessNotFound;
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    var proc_name: [:0]const u8 = "steam.exe";
+
+    // One optional param for steamcmd
+    if (args.len == 2) { 
+        if (std.mem.eql(u8, args[1], "--steamcmd")) {
+            proc_name = "steamcmd.exe";
+        } else {
+            usage(args[0]);
+        }
+    // Otherwise, it's just a usage error.
+    } else if (args.len != 1) {
+        usage(args[0]);
+    }
+
+    const proc_id = (try proc_id_by_name(proc_name)) orelse return error.ProcessNotFound;
 
     try stdout.print("Got process handle.\n", .{});
 
