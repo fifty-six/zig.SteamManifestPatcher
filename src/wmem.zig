@@ -5,7 +5,7 @@ const psapi = win.psapi;
 
 const c = @import("./c.zig");
 
-pub fn write_patch(proc: win.HANDLE, module: win.HANDLE, size: usize, addr: usize, patch: []const u8) !void {
+pub fn write_mem(proc: win.HANDLE, module: win.HANDLE, size: usize, addr: usize, mem: []const u8) !void {
     var old_protection: win.DWORD = undefined;
 
     if (c.VirtualProtectEx(proc, module, @truncate(u32, size), c.PAGE_EXECUTE_READWRITE, &old_protection) == 0)
@@ -13,7 +13,7 @@ pub fn write_patch(proc: win.HANDLE, module: win.HANDLE, size: usize, addr: usiz
 
     var bytes_written: win.SIZE_T = undefined;
 
-    if (c.WriteProcessMemory(proc, @intToPtr(*c_void, addr), @ptrCast(*const c_void, patch), patch.len, &bytes_written) == 0)
+    if (c.WriteProcessMemory(proc, @intToPtr(*anyopaque, addr), mem.ptr, mem.len, &bytes_written) == 0)
         return error.UnableToWriteMemory;
 }
 
@@ -26,15 +26,17 @@ pub fn get_module_size(proc: win.HANDLE, module: win.HANDLE) !usize {
     return mod_info.SizeOfImage;
 }
 
-pub fn read_memory_address(proc_handle: win.HANDLE, addr: usize, size: usize, alloc: *std.mem.Allocator) ![]u8 {
+pub fn read_memory_address(proc_handle: win.HANDLE, addr: usize, size: usize, alloc: std.mem.Allocator) ![]u8 {
     var buf: []u8 = try alloc.alloc(u8, size);
 
     var bytes_read: win.SIZE_T = undefined;
 
-    if (c.ReadProcessMemory(proc_handle, @intToPtr(win.LPCVOID, addr), @ptrCast(*c_void, buf), size, &bytes_read) == 0)
+    if (c.ReadProcessMemory(proc_handle, @intToPtr(win.LPCVOID, addr), buf.ptr, size, &bytes_read) == 0)
         return error.MemoryUnreadable;
 
-    return buf[0..bytes_read];
+    const res = alloc.shrink(buf, bytes_read);
+
+    return res;
 }
 
 pub fn handle_for_mod(procHandle: win.HANDLE, target: []const u8) !win.HMODULE {

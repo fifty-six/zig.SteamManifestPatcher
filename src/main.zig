@@ -8,10 +8,9 @@ const psapi = std.os.windows.psapi;
 const win = std.os.windows;
 
 const c = @import("./c.zig");
+const wmem = @import("./wmem.zig");
 
 const STR: []const u8 = "Depot download failed : Manifest not available";
-
-usingnamespace @import("./wmem.zig");
 
 pub fn main() !void {
     caught_main() catch |e| {
@@ -26,16 +25,16 @@ pub fn main() !void {
 }
 
 pub fn usage(exe: []const u8) noreturn {
-    log.emerg("Usage: {s} [--steamcmd]\n", .{exe});
+    log.err("Usage: {s} [--steamcmd]\n", .{exe});
     process.exit(1);
 }
 
 pub fn caught_main() !void {
     const stdout = std.io.getStdOut().writer();
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
-    const allocator = &gpa.allocator;
+    const allocator = gpa.allocator();
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
@@ -43,18 +42,18 @@ pub fn caught_main() !void {
     var proc_name: [:0]const u8 = "steam.exe";
 
     // One optional param for steamcmd
-    if (args.len == 2) { 
+    if (args.len == 2) {
         if (std.mem.eql(u8, args[1], "--steamcmd")) {
             proc_name = "steamcmd.exe";
         } else {
             usage(args[0]);
         }
-    // Otherwise, it's just a usage error.
+        // Otherwise, it's just a usage error.
     } else if (args.len != 1) {
         usage(args[0]);
     }
 
-    const proc_id = (try proc_id_by_name(proc_name)) orelse return error.ProcessNotFound;
+    const proc_id = (try wmem.proc_id_by_name(proc_name)) orelse return error.ProcessNotFound;
 
     try stdout.print("Got process handle.\n", .{});
 
@@ -62,14 +61,15 @@ pub fn caught_main() !void {
 
     const proc_handle = c.OpenProcess(flags, @boolToInt(false), proc_id) orelse return error.UnableToOpenProcess;
 
-    const mod_handle = try handle_for_mod(proc_handle, "steamclient.dll");
+    const mod_handle = try wmem.handle_for_mod(proc_handle, "steamclient.dll");
     const handle_addr = @ptrToInt(mod_handle);
 
-    const size = try get_module_size(proc_handle, mod_handle);
+    const size = try wmem.get_module_size(proc_handle, mod_handle);
 
     try stdout.print("Module handle address: {x}\n", .{handle_addr});
 
-    const buf = try read_memory_address(proc_handle, handle_addr, size, allocator);
+    const buf = try wmem.read_memory_address(proc_handle, handle_addr, size, allocator);
+    defer allocator.free(buf);
 
     const str_ind = std.mem.indexOf(u8, buf, STR) orelse return error.StringNotFound;
     const str_addr = handle_addr + str_ind;
@@ -117,12 +117,12 @@ pub fn caught_main() !void {
 
     const patch_addr = @ptrToInt(mod_handle) + ind;
 
-    try write_patch(proc_handle, mod_handle, size, patch_addr, buf[ind .. ind + 2]);
+    try wmem.write_mem(proc_handle, mod_handle, size, patch_addr, buf[ind .. ind + 2]);
 
     try stdout.print("Wrote patch to memory.\n", .{});
 
     // Read 10 bytes before and after the patch address.
-    const patched = try read_memory_address(proc_handle, patch_addr - 10, 20, allocator);
+    const patched = try wmem.read_memory_address(proc_handle, patch_addr - 10, 20, allocator);
     defer allocator.free(patched);
 
     // Make sure patch was applied correctly

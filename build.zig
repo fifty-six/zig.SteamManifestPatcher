@@ -14,7 +14,7 @@ pub fn build(b: *Builder) void {
     const exe = b.addExecutable("SteamDepotDownpatcher", "src/main.zig");
 
     // Got to link against libc for windows stuff.
-    exe.linkSystemLibrary("c");
+    exe.linkLibC();
 
     exe.setTarget(target);
     exe.setBuildMode(mode);
