@@ -1,4 +1,6 @@
 # Steam Manifest Patcher
+![build](https://github.com/fifty-six/zig.SteamManifestPatcher/actions/workflows/build.yml/badge.svg)
+![GitHub all releases](https://img.shields.io/github/downloads/fifty-six/zig.SteamManifestPatcher/total)
 
 Supported platform: Windows.
 
