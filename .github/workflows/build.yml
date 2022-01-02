@@ -10,7 +10,7 @@ jobs:
             - name: Setup zig
               uses: goto-bus-stop/setup-zig@v1
               with:
-                  version: 0.8.0
+                  version: 0.9.0
             - name: Build
               run: zig build
           
